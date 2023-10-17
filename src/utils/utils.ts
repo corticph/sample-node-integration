@@ -26,11 +26,6 @@ export const enterSessionAndOpenWindow = async (sessionID: string) => {
     cortiCallMethod('/realtime/enterSession', {
       sessionID
     }).then(() =>
-      fetch(`http://localhost:45001/window/unhideAllAndFocus`, {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        method: 'POST'
-      })
+        cortiCallMethod('/realtime/enterSession')
     );
   };
