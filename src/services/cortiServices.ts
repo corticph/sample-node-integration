@@ -6,7 +6,7 @@ interface IParams {
   [key: string]: any;
 }
 
-interface IFactUpdate {
+export interface IFactUpdate {
   id: string;
   value: string;
 }
