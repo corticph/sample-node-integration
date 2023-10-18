@@ -27,7 +27,7 @@ export const openSession = async (req: Request, res: Response) => {
 
   // Check if session is already open
   if (activeSession) {
-    enterSessionAndOpenWindow(activeSession.id);
+    enterSessionAndOpenWindow(activeSession.id, data?.facts);
     return res
       .status(200)
       .send({ message: "Session Opened", sessionId: activeSession.id });

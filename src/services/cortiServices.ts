@@ -6,11 +6,6 @@ interface IParams {
   [key: string]: any;
 }
 
-export interface IFactUpdate {
-  id: string;
-  value: string;
-}
-
 export const cortiCallMethod = async (method: string, params?: IParams) => {
     const body = JSON.stringify({ method, params });
   

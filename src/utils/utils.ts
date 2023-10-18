@@ -26,7 +26,7 @@ export const getApiHost = async () => {
 
 export const enterSessionAndOpenWindow = async (
   sessionID: string,
-  facts: IFactUpdate
+  facts?: IFactUpdate
 ) => {
   console.log(`Entering Session: ${sessionID}`);
   cortiCallMethod("/realtime/enterSession", {
