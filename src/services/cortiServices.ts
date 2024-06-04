@@ -11,6 +11,9 @@ interface IFactUpdate {
   value: string;
 }
 
+type CaseCustomProperties = Record<string, string>; // String values for all properties
+
+
 export const cortiCallMethod = async (method: string, params?: IParams) => {
     const body = JSON.stringify({ method, params });
   
@@ -50,6 +53,27 @@ export const updateFactValues = async (
         "x-api-key": apiKey,
       },
       body: JSON.stringify(factUpdateBody),
+    }
+  );
+};
+
+export const updateCaseCustomProperties = async (
+  caseId: string,
+  customPropertiesBody: CaseCustomProperties
+) => {
+  const apiHost = await getApiHost();
+  const apiKey = getApiKey(apiHost);
+  if (!apiKey) return console.error(`No API key found for ${apiHost}`);
+
+  fetch(
+    `${apiHost}/public/api/v2.0/cases/${caseId}/custom-properties`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify(customPropertiesBody),
     }
   );
 };

@@ -12,9 +12,12 @@ import {
   StartSessionResponse,
 } from "../types/apiResponses";
 
+interface OpenSessionParams {
+  externalId: string;
+}
+
 export const openSession = async (req: Request, res: Response) => {
-  let data = req.body;
-  const externalId = data.externalID.toString();
+  let {externalId} = req.body.data as OpenSessionParams;
 
   const { activeSessions } =
     ((await cortiCallMethod(
