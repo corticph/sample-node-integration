@@ -1,4 +1,4 @@
-import { updateFactValues } from "../services/cortiServices";
+import { cortiCallMethod } from "../services/cortiServices";
 import { ActionBlockTriggered } from "../types/events";
 
 const handleActionBlockTriggered = async (data: ActionBlockTriggered) => {
@@ -22,18 +22,22 @@ const handleActionBlockTriggered = async (data: ActionBlockTriggered) => {
       acc.push({ id: key, value: value });
       return acc;
     },
-    [] as { id: string; value: string }[]
+    [] as { id: string; value: string | boolean }[]
   );
 
   // TODO: Set typecode and subtypecode in CAD
   factUpdateBody.forEach((fact) => {
     if(fact.value){
+      console.log(session.id)
       console.log(`New Typecode: ${fact.id} - ${fact.value} (Session ID: ${session.externalID})`);
     }
   });
   
   // Patch session with new facts
-  updateFactValues(session.id, factUpdateBody);
+  cortiCallMethod('/realtime/session/setFactValues', {
+    sessionID: session.id,
+    facts: factUpdateBody
+  })
 };
 
 export default handleActionBlockTriggered;

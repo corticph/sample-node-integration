@@ -62,3 +62,8 @@ export interface DBSession {
     started_at: string;
     call_id: string | null;
 }
+
+export interface IFactUpdate {
+  id: string;
+  value: string;
+}
