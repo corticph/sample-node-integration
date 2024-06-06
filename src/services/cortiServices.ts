@@ -6,11 +6,6 @@ interface IParams {
   [key: string]: any;
 }
 
-interface IFactUpdate {
-  id: string;
-  value: string;
-}
-
 type CaseCustomProperties = Record<string, string>; // String values for all properties
 
 
@@ -31,31 +26,10 @@ export const cortiCallMethod = async (method: string, params?: IParams) => {
         return result.result;
     } catch (error) {
         console.log("error", error);
-        throw error; // Optionally rethrow the error for better error handling
+        throw error;
     }
   };
   
-
-export const updateFactValues = async (
-  sessionId: string,
-  factUpdateBody: IFactUpdate[]
-) => {
-  const apiHost = await getApiHost();
-  const apiKey = getApiKey(apiHost);
-  if (!apiKey) return console.error(`No API key found for ${apiHost}`);
-
-  fetch(
-    `${apiHost}/public/api/v2.0/triage-sessions/${sessionId}/flow-fact-values?&timeout=5`,
-    {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-      },
-      body: JSON.stringify(factUpdateBody),
-    }
-  );
-};
 
 export const updateCaseCustomProperties = async (
   caseId: string,
