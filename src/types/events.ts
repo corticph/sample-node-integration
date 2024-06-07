@@ -67,7 +67,7 @@ interface CustomProperty {
   value: string;
 }
 
-interface Session {
+export interface Session {
   id: string;
   caseID?: string;
   externalID?: string;

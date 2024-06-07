@@ -16,6 +16,8 @@ export const handleEvent = async (req: Request, res: Response) => {
     case 'realtime.session.triage-flow.grouped-flow-value-collector-blocks-updated':
         eventHandlers.handleGroupedFlowValueCollectorBlocksUpdated(data);
       break;
+    case 'realtime.session.case-id-changed':
+        eventHandlers.handleSessionCaseIDChanged(data);
     case 'realtime.session-opened':
     case 'realtime.session-closed':
     case 'app.logout':
