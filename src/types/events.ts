@@ -62,7 +62,7 @@ interface FlowValueCollectorPayload {
   };
 }
 
-interface CustomProperty {
+export interface CustomProperty {
   key: string;
   value: string;
 }

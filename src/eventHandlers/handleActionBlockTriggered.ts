@@ -29,7 +29,7 @@ const handleActionBlockTriggered = async (data: ActionBlockTriggered) => {
   factUpdateBody.forEach((fact) => {
     if(fact.value){
       console.log(session.id)
-      console.log(`New Typecode: ${fact.id} - ${fact.value} (Session ID: ${session.externalID})`);
+      console.log(`New Typecode: ${fact.id} - ${fact.value} (External Session ID: ${session.externalID})`);
     }
   });
   
