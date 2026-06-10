@@ -28,7 +28,6 @@ const handleActionBlockTriggered = async (data: ActionBlockTriggered) => {
   // TODO: Set typecode and subtypecode in CAD
   factUpdateBody.forEach((fact) => {
     if(fact.value){
-      console.log(session.id)
       console.log(`New Typecode: ${fact.id} - ${fact.value} (External Session ID: ${session.externalID})`);
     }
   });

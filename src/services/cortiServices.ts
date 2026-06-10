@@ -1,6 +1,6 @@
 import { Call, CallsResponse, DBSession, DBSessionsResponse } from "../types/apiResponses";
 import { getApiHost, getApiKey } from "../utils/utils";
-const clientHost = process.env.CLIENTHOST;
+const clientHost = process.env.CLIENTHOST || "http://localhost:45001";
 
 interface IParams {
   [key: string]: any;

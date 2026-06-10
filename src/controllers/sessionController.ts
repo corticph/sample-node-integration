@@ -23,7 +23,7 @@ export const openSession = async (req: Request, res: Response) => {
   if (!data || !data.externalId) {
     return res.status(400).send({ message: "Missing externalId" });
   }
-  let {externalId} = req.body.data as OpenSessionParams;
+  const { externalId } = data;
 
   const { activeSessions } =
     ((await cortiCallMethod(

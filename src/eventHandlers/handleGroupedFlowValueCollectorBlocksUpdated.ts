@@ -1,10 +1,10 @@
 import { GroupedFlowValueCollectorBlocksUpdated, CustomProperty } from "../types/events";
 
 interface ISelectUpdates {
-  blockPrototypeId?: string;
+  blockPrototypeId: string;
   value?: string;
   text: string;
-  customProperties?: CustomProperty[];
+  customProperties: CustomProperty[];
 }
 
 const handleGroupedFlowValueCollectorBlocksUpdated = async (
@@ -21,18 +21,19 @@ const handleGroupedFlowValueCollectorBlocksUpdated = async (
     const { values, blockPrototypes } = block.collectedBlockValues;
     
     values.forEach((collectedBlockValue) => {
-
       const blockPrototype = blockPrototypes.find(
-          (bp) => bp.id === collectedBlockValue.blockPrototypeID
-        )
+        (bp) => bp.id === collectedBlockValue.blockPrototypeID
+      );
+      // Skip values we can't tie back to a prototype, otherwise they would
+      // collapse under a single `undefined` key during dedupe below.
+      if (!blockPrototype) return;
 
-      const newCollectedBlock: ISelectUpdates = {
-        blockPrototypeId: blockPrototype?.id,
-        customProperties: blockPrototype?.customProperties || [],
-        ...collectedBlockValue
-      };
-
-      selectUpdates.push(newCollectedBlock)
+      // Spread first so the prototype-level fields below always win.
+      selectUpdates.push({
+        ...collectedBlockValue,
+        blockPrototypeId: blockPrototype.id,
+        customProperties: blockPrototype.customProperties || [],
+      });
     })
     // TODO: update your application with the concatenated string value for each collector
     console.log(
