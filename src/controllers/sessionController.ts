@@ -9,15 +9,21 @@ import {
   ActiveSessionsResponse,
   CurrentUserResponse,
   DBSession,
+  IFactUpdate,
   StartSessionResponse,
 } from "../types/apiResponses";
 
 interface OpenSessionParams {
   externalId: string;
+  facts?: IFactUpdate;
 }
 
 export const openSession = async (req: Request, res: Response) => {
-  let {externalId} = req.body.data as OpenSessionParams;
+  const data = req.body.data as OpenSessionParams;
+  if (!data || !data.externalId) {
+    return res.status(400).send({ message: "Missing externalId" });
+  }
+  const { externalId } = data;
 
   const { activeSessions } =
     ((await cortiCallMethod(
