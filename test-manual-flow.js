@@ -88,11 +88,15 @@ async function run() {
   // ── Step 3: Graceful shutdown ─────────────────────────────
   process.on('SIGINT', async () => {
     step(3, 'leaveCortiSession — cleaning up');
-    const leaveResult = await post('/leaveCortiSession', {});
+    const leaveResult = await post('/leaveCortiSession', { sessionId });
     console.log(`  → HTTP ${leaveResult.status}:`, leaveResult.data);
     console.log('\n  Done. Check integration logs for "Event: realtime.session-closed".\n');
     process.exit(0);
   });
+
+  // Keep the process alive so the dispatcher can interact with Corti and the
+  // events stream in. Ctrl+C triggers the SIGINT handler above to leave.
+  process.stdin.resume();
 }
 
 run().catch(err => {

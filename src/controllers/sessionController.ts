@@ -9,13 +9,13 @@ import {
   ActiveSessionsResponse,
   CurrentUserResponse,
   DBSession,
-  IFactUpdate,
+  FactUpdatePayload,
   StartSessionResponse,
 } from "../types/apiResponses";
 
 interface OpenSessionParams {
   externalId: string;
-  facts?: IFactUpdate;
+  facts?: FactUpdatePayload;
 }
 
 export const openSession = async (req: Request, res: Response) => {
@@ -25,61 +25,82 @@ export const openSession = async (req: Request, res: Response) => {
   }
   const { externalId } = data;
 
-  const { activeSessions } =
-    ((await cortiCallMethod(
+  try {
+    // Be defensive: the desktop app may return an unexpected shape (e.g. while
+    // shutting down), so default to an empty list rather than crashing.
+    const activeSessionsResult = (await cortiCallMethod(
       "/realtime/activeSessions"
-    )) as ActiveSessionsResponse) || [];
+    )) as ActiveSessionsResponse | undefined;
+    const activeSessions = activeSessionsResult?.activeSessions ?? [];
 
-  const activeSession = activeSessions.find(
-    (session) => session.externalID === externalId
-  );
+    const activeSession = activeSessions.find(
+      (session) => session.externalID === externalId
+    );
 
-  // Check if session is already open
-  if (activeSession) {
-    enterSessionAndOpenWindow(activeSession.id, data?.facts);
+    // Check if session is already open
+    if (activeSession) {
+      enterSessionAndOpenWindow(activeSession.id, data?.facts);
+      return res
+        .status(200)
+        .send({ message: "Session Opened", sessionId: activeSession.id });
+    }
+
+    // Check if session already exists in database
+    const sessionFromDb = (await checkSessionExists(externalId)) as DBSession;
+    if (sessionFromDb) {
+      enterSessionAndOpenWindow(sessionFromDb.id, data?.facts);
+      return res
+        .status(200)
+        .send({ message: "Session from Db", sessionId: sessionFromDb.id });
+    }
+
+    // Find appropriate call to match
+    const calls = await getMatchingCalls();
+    // return first call that matches (calls are sorted by start time)
+    // Note, you may want to introduce more complex logic here to ensure you are matching
+    const currentUser = (await cortiCallMethod(
+      "/app/getCurrentUser"
+    )) as CurrentUserResponse;
+    const matchingCall = calls.find((call) => call.user_id === currentUser.id);
+
+    let newSession: StartSessionResponse;
+
+    if (matchingCall) {
+      newSession = (await cortiCallMethod("/realtime/startSession", {
+        externalID: externalId,
+        caseID: matchingCall.case_id,
+      })) as StartSessionResponse;
+    } else {
+      newSession = (await cortiCallMethod("/realtime/startSession", {
+        externalID: externalId,
+      })) as StartSessionResponse;
+    }
+
+    enterSessionAndOpenWindow(newSession.session.id, data?.facts);
+
     return res
       .status(200)
-      .send({ message: "Session Opened", sessionId: activeSession.id });
-  }
-
-  // Check if session already exists in database
-  const sessionFromDb = (await checkSessionExists(externalId)) as DBSession;
-  if (sessionFromDb) {
-    enterSessionAndOpenWindow(sessionFromDb.id);
+      .send({ message: "Session New", sessionId: newSession.session.id });
+  } catch (error) {
+    // A thrown error here (e.g. desktop app unreachable) would otherwise become
+    // an unhandled rejection and crash the whole process.
+    console.error("openSession failed:", error);
     return res
-      .status(200)
-      .send({ message: "Session from Db", sessionId: sessionFromDb.id });
+      .status(502)
+      .send({ message: "Failed to reach the Corti desktop app" });
   }
-
-  // Find appropriate call to match
-  const calls = await getMatchingCalls();
-  // return first call that matches (calls are sorted by start time)
-  // Note, you may want to introduce more complex logic here to ensure you are matching
-  const currentUser = (await cortiCallMethod(
-    "/app/getCurrentUser"
-  )) as CurrentUserResponse;
-  const matchingCall = calls.find((call) => call.user_id === currentUser.id);
-
-  let newSession: StartSessionResponse;
-
-  if (matchingCall) {
-    newSession = (await cortiCallMethod("/realtime/startSession", {
-      externalID: externalId,
-      caseID: matchingCall.case_id,
-    })) as StartSessionResponse;
-  } else {
-    newSession = (await cortiCallMethod("/realtime/startSession", {
-      externalID: externalId,
-    })) as StartSessionResponse;
-  }
-
-  enterSessionAndOpenWindow(newSession.session.id);
-
-  return res
-    .status(200)
-    .send({ message: "Session New", sessionId: newSession.session.id });
 };
 
 export const leaveSession = async (req: Request, res: Response) => {
-  cortiCallMethod("/realtime/leaveSession").then(() => res.sendStatus(200));
+  // The desktop app's /realtime/leaveSession takes the sessionID to leave.
+  // The CAD stored it from /openCortiSession; forward it when provided.
+  const sessionId = req.body?.sessionId as string | undefined;
+  const params = sessionId ? { sessionID: sessionId } : undefined;
+  try {
+    await cortiCallMethod("/realtime/leaveSession", params);
+    res.sendStatus(200);
+  } catch (error) {
+    console.error("leaveSession failed:", error);
+    res.sendStatus(502);
+  }
 };

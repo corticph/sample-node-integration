@@ -35,7 +35,7 @@ POST /leaveCortiSession ─────▶│──/realtime/leaveSession──�
 
 | Port | Owner | Purpose |
 |------|-------|---------|
-| `45002` | This integration | Receives commands from your CAD (`/openCortiSession`, `/leaveCortiSession`) and events pushed by Corti (`/events`) |
+| `45002` | This integration | Receives commands from your CAD (`/openCortiSession`, `/leaveCortiSession`), events pushed by Corti (`/events`), and a `GET /health` liveness probe |
 | `45001` | Corti Desktop App | Receives `callMethod` RPC calls from this integration to control sessions and the window |
 
 Your CAD calls port `45002` only. The integration handles all Corti communication.
@@ -69,11 +69,18 @@ PORT=45002
 # Corti desktop app RPC server — don't change this
 CLIENTHOST=http://localhost:45001
 
-# API key for your Corti environment.
-# Derive the variable name from your API host:
-# https://api.myenv.motocorti.io → API_KEY_MYENV
-API_KEY_MYENV=your-api-key-here
+# API key for your Corti environment
+API_KEY=your-api-key-here
 ```
+
+#### Environments
+
+There is no shared "prod" or "dev" — **each customer has their own isolated Corti environment**, identified by a short name (the examples in this repo use one called `try`). For an environment named `<env>`:
+
+- **Web frontend:** `https://<env>.corti.app`
+- **API:** `https://api.<env>.motocorti.io`
+
+A single integration instance serves one environment, so set `API_KEY` to that environment's key. The integration still discovers the API host at runtime from the desktop app (`/app/getApiHost`) to build its REST calls — but the key itself comes straight from `API_KEY`. To target a different environment, log the desktop app into it and swap `API_KEY`; no code changes needed.
 
 ### Run
 
@@ -126,7 +133,7 @@ Content-Type: application/json
 ```
 
 - **`externalId`** — your unique identifier for this call or incident. Used to prevent duplicates and to match events back to the right record.
-- **`facts`** — data you already have. When re-entering an existing session these are written back to the session so the dispatcher sees up-to-date information.
+- **`facts`** — data you already have, shaped as `{ factValues: [{ id, value }] }`. Whenever provided, they're written to the session — both when starting a new session and when re-entering an existing one — so the dispatcher sees up-to-date information. The integration forwards `factValues` to the desktop app's `setFactValues` RPC as `{ sessionID, facts }`.
 
 ---
 
@@ -137,7 +144,7 @@ Content-Type: application/json
 1. **Check active sessions** — calls `/realtime/activeSessions` on the desktop app. If a session with the same `externalId` is already open, navigates to it and returns immediately.
 2. **Check the database** — calls the Corti REST API to look up a past session by `externalId`. If one exists, re-enters it.
 3. **Start a new session** — calls the Corti REST API to find an active call for the current user, then calls `/realtime/startSession`. If a matching call is found the session is linked to its case ID; otherwise a standalone session is created.
-4. **Enter and focus** — calls `/realtime/enterSession` to navigate the desktop app to the session, then `/window/unhideAllAndFocus` to bring it to the foreground.
+4. **Enter, focus, and write facts** — calls `/realtime/enterSession` to navigate the desktop app to the session, `/window/unhideAllAndFocus` to bring it to the foreground, and (when `facts` were supplied) `/realtime/session/setFactValues` to write them onto the session.
 
 The response is returned to your CAD:
 
@@ -146,6 +153,14 @@ The response is returned to your CAD:
 ```
 
 `message` will be `"Session New"`, `"Session Opened"` (existing active session), or `"Session from Db"` (found in database). Store the `sessionId` to correlate incoming events.
+
+**Response codes:**
+
+| Status | Body | When |
+|--------|------|------|
+| `200` | `{ message, sessionId }` | Session opened — `message` is `Session New`, `Session Opened`, or `Session from Db` |
+| `400` | `{ message: "Missing externalId" }` | `data.externalId` was missing from the request |
+| `502` | `{ message: "Failed to reach the Corti desktop app" }` | The desktop app couldn't be reached (e.g. not running) |
 
 ---
 
@@ -164,9 +179,10 @@ While the dispatcher interacts with the Corti flow, the desktop app pushes event
 **Event:** `realtime.session.triage-flow.action-block-triggered`  
 **Handler:** `src/eventHandlers/handleActionBlockTriggered.ts`
 
-Fired when the dispatcher clicks a protocol or typecode button. The handler merges `customProperties` from the block prototype and block instance (instance values win on conflict) into a flat map, logs each value, and writes them back to the session as facts via `/realtime/session/setFactValues`.
+Fired when the dispatcher clicks a protocol or typecode button. The handler always logs the trigger (falling back to the block's `content` or `id` when it has no `name`), then merges any `customProperties` from the block prototype and block instance (instance values win on conflict) into a flat map, logs each value, and — when the block carried any — writes them back to the session as facts via `/realtime/session/setFactValues`. A block with no name or custom properties still logs a useful trigger line.
 
 ```
+Terminal log: Action block triggered: Chest Pain (External Session ID: CAD-12345)
 Terminal log: New Typecode: typecode - CHEST_PAIN (External Session ID: CAD-12345)
 ```
 
@@ -266,20 +282,27 @@ Terminal log: Event: realtime.session-opened (Session ID: 235caf94-…, External
 Terminal log: Event: realtime.session-closed (Session ID: 235caf94-…, External ID: CAD-12345)
 ```
 
+#### User logs in / out
+
+**Events:** `app.login`, `app.logout`  
+**Handler:** `src/controllers/eventsController.ts` — currently logged only.
+
+The desktop app also emits these auth lifecycle events. They're logged so you can see them in the stream; add logic if your CAD needs to react to the dispatcher signing in or out.
+
 ---
 
 ### Step 4 — Call ends
 
-When the call is complete, your CAD POSTs to `/leaveCortiSession`:
+When the call is complete, your CAD POSTs to `/leaveCortiSession`. Include the `sessionId` you stored from `/openCortiSession` so the integration can tell the desktop app which session to leave:
 
 ```http
 POST http://localhost:45002/leaveCortiSession
 Content-Type: application/json
 
-{}
+{ "sessionId": "235caf94-bcb6-41f4-b663-c99e09e38aff" }
 ```
 
-The integration calls `/realtime/leaveSession` on the desktop app. The `realtime.session-closed` event will arrive at `/events` shortly after.
+The integration forwards it to `/realtime/leaveSession` as `{ sessionID }`. An empty body (`{}`) is also accepted and leaves the current session view. It returns `200` on success, or `502` if the desktop app can't be reached. The `realtime.session-closed` event will arrive at `/events` shortly after.
 
 ---
 
@@ -301,6 +324,8 @@ Response:
 
 This integration wraps it in `cortiCallMethod(method, params?)` in `src/services/cortiServices.ts`. Use this function for all desktop app interactions.
 
+The full method, event, and type catalog is in [`DESKTOP_APP_API.md`](DESKTOP_APP_API.md). The types in `src/types/` mirror it 1:1 — `shared.ts` holds the shared types (`Session`, `Fact`, `CustomProperty`, …), `apiResponses.ts` the `callMethod` result types, and `events.ts` the event payloads.
+
 **Endpoints used by this integration:**
 
 | Method | Params | What it does |
@@ -308,7 +333,7 @@ This integration wraps it in `cortiCallMethod(method, params?)` in `src/services
 | `/realtime/activeSessions` | — | Returns all currently active sessions |
 | `/realtime/startSession` | `externalID?, caseID?` | Creates a new session |
 | `/realtime/enterSession` | `sessionID` | Navigates the desktop app to a session |
-| `/realtime/leaveSession` | — | Leaves the current session view |
+| `/realtime/leaveSession` | `sessionID?` | Leaves the session view (the current one if omitted) |
 | `/realtime/session/setFactValues` | `sessionID, facts[]` | Writes fact values onto a session |
 | `/window/unhideAllAndFocus` | — | Brings the Corti window to the foreground |
 | `/app/getApiHost` | — | Returns the Corti REST API base URL |
@@ -319,7 +344,42 @@ This integration wraps it in `cortiCallMethod(method, params?)` in `src/services
 
 ## Testing
 
-### Manual end-to-end test
+### Automated tests (no desktop app required)
+
+Unit tests cover the handler/util logic. Integration tests boot the real Express app against an in-process stub that impersonates the desktop app's `callMethod` RPC, then assert the full request flow (including that facts are forwarded to `setFactValues` as `{ sessionID, facts }`).
+
+```bash
+npm test                 # build, then unit + integration
+npm run test:unit
+npm run test:integration
+```
+
+### Automated FVC handler test (integration must be running)
+
+Posts synthetic payloads directly to `/events` to verify the grouped flow value collector handler — no live session needed.
+
+```bash
+# Terminal 1 — integration must be running
+npm run dev
+
+# Terminal 2
+npm run test:grouped-fvc
+# or: node test-grouped-flow-value-collector-blocks-updated.js
+```
+
+### End-to-end against the desktop app
+
+With the desktop app running and logged in, this drives the open → write-facts → leave flow through the real RPC.
+
+```bash
+# Terminal 1
+npm run dev
+
+# Terminal 2
+npm run test:e2e
+```
+
+### Manual end-to-end walkthrough
 
 Simulates a full dispatch cycle and walks you through verifying each event type in the live Corti UI.
 
@@ -333,25 +393,14 @@ node test-manual-flow.js
 
 The script opens a session, prints a checklist of actions to perform in the Corti UI, and waits. Press Ctrl+C to trigger the leave step.
 
-### Automated FVC handler test
-
-Posts synthetic payloads directly to `/events` to verify the grouped flow value collector handler — no live session or desktop app required.
-
-```bash
-# Terminal 1 — integration must be running
-npm run dev
-
-# Terminal 2
-node test-grouped-flow-value-collector-blocks-updated.js
-# or: npm run test:grouped-fvc
-```
-
 ---
 
 ## Project structure
 
 ```
 src/
+  app.ts                      # Builds the Express app (middleware + routes)
+  index.ts                    # Entry point — loads .env and starts the server
   controllers/
     eventsController.ts       # Routes incoming events by name to handlers
     sessionController.ts      # Handles /openCortiSession and /leaveCortiSession
@@ -361,15 +410,20 @@ src/
     handleGroupedFlowValueCollectorBlocksUpdated.ts  # Structured flow answers
     handleSessionCaseIDChanged.ts                    # Case ID linking
   routes/
+    health.ts                 # GET /health
     events.ts                 # POST /events
     session.ts                # POST /openCortiSession, POST /leaveCortiSession
   services/
     cortiServices.ts          # cortiCallMethod wrapper + Corti REST API calls
   types/
-    apiResponses.ts           # Response type definitions
+    shared.ts                 # Shared types (Session, Fact, CustomProperty, …) — 1:1 with DESKTOP_APP_API.md
+    apiResponses.ts           # callMethod result types + Corti REST API types
     events.ts                 # Event payload type definitions
   utils/
     utils.ts                  # getApiHost, getApiKey, enterSessionAndOpenWindow
+tests/
+  unit.test.js                # Handler/util logic (no network)
+  integration.test.js         # Full app against a stub desktop app
 ```
 
 ### Adding a new event handler

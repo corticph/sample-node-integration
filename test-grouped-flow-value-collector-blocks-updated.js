@@ -115,18 +115,26 @@ async function runTests() {
   console.log('');
 
   // ----------------------------------------
-  // 2. FVC with requireExplicitSendToLocalhostApi – no events on value change
+  // 2. FVC carrying requireExplicitSendToLocalhostApi is still accepted by the integration
   // ----------------------------------------
-  console.log('Test 2: FVC with requireExplicitSendToLocalhostApi – no events on value change');
+  console.log('Test 2: FVC with requireExplicitSendToLocalhostApi is accepted by the integration');
   console.log('-'.repeat(60));
+  console.log('  Note: auto-emit suppression happens in the desktop app, not here.');
+  console.log('  Once an event IS emitted, the integration must process it normally.');
   try {
-    // Simulate “value changes”: we do not send any events. So the API receives 0.
-    // Assertion: after “value changes” we have sent 0 grouped-flow-value-collector-blocks-updated events.
-    // We can’t assert “API received 0” without changing the app. We assert our test behaviour:
-    // we did not post any events for value changes → then we post one “Send” and it’s the first one.
-    pass('Value changes send 0 events (simulated by not posting); nothing to assert on API.');
+    const payload = buildFvcEventPayload({
+      fvcName: 'ExplicitSendCollector',
+      customProperties: [{ key: 'requireExplicitSendToLocalhostApi', value: 'true' }],
+      displayValue: 'pending-value',
+    });
+    const { status, ok } = await postEvent(payload);
+    if (ok && status === 200) {
+      pass('Integration accepted an FVC event that carries requireExplicitSendToLocalhostApi.');
+    } else {
+      fail('Integration rejected the requireExplicitSendToLocalhostApi event', `status=${status}`);
+    }
   } catch (e) {
-    fail('Explicit-send “no events on change” threw', e.message);
+    fail('requireExplicitSendToLocalhostApi acceptance test threw', e.message);
   }
   console.log('');
 
@@ -202,11 +210,7 @@ async function runTests() {
 // Allow running standalone (node test-grouped-flow-value-collector-blocks-updated.js)
 async function main() {
   try {
-    const r = await fetch(BASE_URL + '/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'app.login', data: {} }),
-    }).catch(() => null);
+    const r = await fetch(BASE_URL + '/health').catch(() => null);
     if (!r || r.status !== 200) {
       console.error('Cannot reach API at', BASE_URL, '- ensure the app is running (e.g. npm run dev).');
       process.exit(1);

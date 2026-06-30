@@ -1,30 +1,20 @@
-export interface Session {
-  id: string;
-  caseID?: string;
-  externalID?: string;
-  owner?: {
-    id: string;
-    name: string;
-  };
-}
+import { Fact, Session, UserTypeSerialized } from "./shared";
 
+// ── Desktop app callMethod result types (1:1 with DESKTOP_APP_API.md) ──
+
+// Result of /realtime/activeSessions
 export interface ActiveSessionsResponse {
   activeSessions: Session[];
 }
 
-export interface CurrentUserResponse {
-  id: string;
-  name: string;
-  organizationID: string;
-  extension?: string;
-  externalID?: string;
-}
+// Result of /app/getCurrentUser
+export type CurrentUserResponse = UserTypeSerialized;
 
 /**
- * Starts new session.
+ * Result of /realtime/startSession.
  *
- * If external ID is provided and matches current session that is active
- * it will not create a new session, but will bring the existing one into focus
+ * If externalID matches an active session, the desktop app refocuses the
+ * existing session instead of creating a new one.
  */
 export interface StartSessionResponse {
   session: {
@@ -33,8 +23,20 @@ export interface StartSessionResponse {
   };
 }
 
+/**
+ * Facts supplied by the CAD on /openCortiSession.
+ *
+ * The CAD sends `{ factValues: [...] }`. The desktop app's
+ * `/realtime/session/setFactValues` RPC expects `{ sessionID, facts: Fact[] }`,
+ * so the `factValues` array is forwarded as `facts` (see enterSessionAndOpenWindow).
+ */
+export interface FactUpdatePayload {
+  factValues: Fact[];
+}
 
-export interface CallsResponse{
+// ── Corti REST API types (separate public REST API, not the desktop app) ──
+
+export interface CallsResponse {
   continuation_token: number | null;
   data: Call[];
 }
@@ -54,16 +56,11 @@ export interface DBSessionsResponse {
 }
 
 export interface DBSession {
-    id: string;
-    user_id: string;
-    owner_user_id: string;
-    case_id: string;
-    external_id: string | null;
-    started_at: string;
-    call_id: string | null;
-}
-
-export interface IFactUpdate {
   id: string;
-  value: string;
+  user_id: string;
+  owner_user_id: string;
+  case_id: string;
+  external_id: string | null;
+  started_at: string;
+  call_id: string | null;
 }

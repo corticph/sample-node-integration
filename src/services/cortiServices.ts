@@ -43,9 +43,9 @@ export const updateCaseCustomProperties = async (
 
 export const checkSessionExists = async (externalSessionId: string): Promise<DBSession | null> => {
   const apiHost = await getApiHost();
-  const apiKey = getApiKey(apiHost);
+  const apiKey = getApiKey();
   if (!apiKey) {
-    console.error(`No API key found for ${apiHost}`);
+    console.error("No API key found — set API_KEY in .env");
     return null;
 }
 
@@ -68,9 +68,9 @@ export const checkSessionExists = async (externalSessionId: string): Promise<DBS
 export const getMatchingCalls = async (window = 60): Promise<Call[]> => {
   
     const apiHost = await getApiHost();
-    const apiKey = getApiKey(apiHost);
+    const apiKey = getApiKey();
     if (!apiKey) {
-        console.error(`No API key found for ${apiHost}`);
+        console.error("No API key found — set API_KEY in .env");
         return []
     }
 

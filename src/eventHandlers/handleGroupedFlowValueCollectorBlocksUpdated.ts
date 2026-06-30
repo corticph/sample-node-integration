@@ -1,4 +1,5 @@
-import { GroupedFlowValueCollectorBlocksUpdated, CustomProperty } from "../types/events";
+import { GroupedFlowValueCollectorBlocksUpdated } from "../types/events";
+import { CustomProperty } from "../types/shared";
 
 interface ISelectUpdates {
   blockPrototypeId: string;
@@ -56,6 +57,9 @@ const handleGroupedFlowValueCollectorBlocksUpdated = async (
       update.customProperties
     );
   });
+
+  // Returned for testability; the controller ignores the return value.
+  return uniqueSelectUpdates;
 };
 
 export default handleGroupedFlowValueCollectorBlocksUpdated;

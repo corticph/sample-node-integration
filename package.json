@@ -6,15 +6,19 @@
   "scripts": {
     "build": "npx tsc",
     "start": "node dist/index.js",
-    "dev": "concurrently \"npx tsc --watch\" \"nodemon -q dist/index.js\""
+    "dev": "concurrently \"npx tsc --watch\" \"nodemon -q dist/index.js\"",
+    "test": "npm run build && node --test tests/unit.test.js tests/integration.test.js",
+    "test:unit": "npm run build && node --test tests/unit.test.js",
+    "test:integration": "npm run build && node --test tests/integration.test.js",
+    "test:grouped-fvc": "node test-grouped-flow-value-collector-blocks-updated.js",
+    "test:e2e": "node test-e2e-desktop.js"
   },
   "author": "Corti ApS",
   "license": "UNLICENSED",
   "dependencies": {
     "body-parser": "^1.20.2",
     "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "node-fetch": "^3.3.2"
+    "express": "^4.18.2"
   },
   "devDependencies": {
     "@types/express": "^4.17.19",

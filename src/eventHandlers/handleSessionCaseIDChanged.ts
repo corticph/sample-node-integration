@@ -1,11 +1,7 @@
 import { updateCaseCustomProperties } from "../services/cortiServices";
-import { Session } from "../types/events";
+import { SessionCaseIDChanged } from "../types/events";
 
-interface SessionCaseIDChangedBody {
-    session: Session;
-}
-
-const handleSessionCaseIDChanged = async (data: SessionCaseIDChangedBody) => {
+const handleSessionCaseIDChanged = async (data: SessionCaseIDChanged) => {
   const { session } = data;
   if (session.caseID) {
     console.log(`Case ID changed: ${session.caseID} (External Session ID: ${session.externalID})`);
