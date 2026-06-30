@@ -32,7 +32,7 @@ export const enterSessionAndOpenWindow = async (
   cortiCallMethod("/realtime/enterSession", {
     sessionID,
   }).then(() => {
-    cortiCallMethod("/app/unhideAllAndFocus");
+    cortiCallMethod("/window/unhideAllAndFocus");
     if (facts) {
       cortiCallMethod("/realtime/session/setFactValues", facts);
     }

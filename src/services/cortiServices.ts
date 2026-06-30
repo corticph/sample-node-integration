@@ -35,21 +35,10 @@ export const updateCaseCustomProperties = async (
   caseId: string,
   customPropertiesBody: CaseCustomProperties
 ) => {
-  const apiHost = await getApiHost();
-  const apiKey = getApiKey(apiHost);
-  if (!apiKey) return console.error(`No API key found for ${apiHost}`);
-
-  fetch(
-    `${apiHost}/public/api/v2.0/cases/${caseId}/custom-properties`,
-    {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-      },
-      body: JSON.stringify(customPropertiesBody),
-    }
-  );
+  cortiCallMethod("/backendproxy/cases/ensureCaseCustomProperties", {
+    caseID: caseId,
+    customProperties: customPropertiesBody,
+  });
 };
 
 export const checkSessionExists = async (externalSessionId: string): Promise<DBSession | null> => {

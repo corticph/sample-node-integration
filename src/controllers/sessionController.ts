@@ -81,5 +81,5 @@ export const openSession = async (req: Request, res: Response) => {
 };
 
 export const leaveSession = async (req: Request, res: Response) => {
-  cortiCallMethod("/realtime/enterSession").then(() => res.sendStatus(200));
+  cortiCallMethod("/realtime/leaveSession").then(() => res.sendStatus(200));
 };

@@ -8,6 +8,7 @@ interface SessionCaseIDChangedBody {
 const handleSessionCaseIDChanged = async (data: SessionCaseIDChangedBody) => {
   const { session } = data;
   if (session.caseID) {
+    console.log(`Case ID changed: ${session.caseID} (External Session ID: ${session.externalID})`);
     // fetch custom properties for the case, either from the CAD or in memory
     const customProperties = {
         "telephone": "1234567890",

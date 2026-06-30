@@ -15,7 +15,10 @@ const handleGroupedFlowValueCollectorBlocksUpdated = async (
   const selectUpdates: ISelectUpdates[] = []
 
   group.forEach((block) => {
-    if (block.displayValues.length === 0) return;
+    if (block.displayValues.length === 0) {
+      console.log(`New Collector: ${block.blockPrototype.name} - (no values) (External Session ID: ${session.externalID})`);
+      return;
+    }
     const textString = block.displayValues.map((obj) => obj.text).join(" | ");
 
     const { values, blockPrototypes } = block.collectedBlockValues;
