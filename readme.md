@@ -1,46 +1,44 @@
 # Corti Triage — CAD Integration (Node.js)
 
-This repository is a **working example** of a CAD integration for the Corti Triage desktop application. Clone it, run it alongside the Corti desktop app, and replace the `console.log` placeholders with calls to your own CAD API.
+A working example of a CAD integration for the Corti Triage desktop application. Clone it, run it alongside the Corti desktop app, and replace the `console.log` placeholders and `TODO` comments with calls to your own CAD API.
 
 ---
 
-## How it works
+## Architecture
 
-When a dispatcher takes a call, your CAD system calls this integration to create and open a Corti Triage session pre-filled with what you already know. As the dispatcher works through Corti's clinical decision support flow, the results — typecodes, demographics, clinical pathway answers — flow back to this integration in real time for you to push into your CAD.
+Two local HTTP servers run side by side on the dispatcher's machine:
 
 ```
-                          This integration                  Corti Desktop App
-                        (Node.js / Express)                  (running locally)
-                                │                                   │
-POST /openCortiSession ────────▶│                                   │
-                                │──/realtime/activeSessions────────▶│
-                                │◀── [ existing sessions ] ─────────│
-                                │                                   │
-                                │  (no existing session)            │
-                                │──/realtime/startSession──────────▶│  ← creates session
-                                │◀── { session: { id } } ───────────│
-                                │──/realtime/enterSession──────────▶│  ← opens it in the UI
-                                │──/window/unhideAllAndFocus───────▶│  ← focuses the window
-                                │──/realtime/session/setFactValues─▶│  ← pre-fills known data
-◀── { sessionId } ─────────────│                                   │
-                                │                                   │
-                                │         Dispatcher works          │
-                                │                                   │
-POST /events ◀─────────────────│◀── action-block-triggered ────────│
-POST /events ◀─────────────────│◀── grouped-fvc-updated ───────────│
-POST /events ◀─────────────────│◀── comment-created ───────────────│
-                                │                                   │
-POST /leaveCortiSession ───────▶│──/realtime/leaveSession─────────▶│
+Your CAD system          This integration             Corti Desktop App
+                       (Node.js / Express)             (running locally)
+                              │                               │
+POST /openCortiSession ──────▶│                               │
+                              │──/realtime/activeSessions────▶│
+                              │◀── [ existing sessions ] ─────│
+                              │                               │
+                              │  (no existing session found)  │
+                              │──/realtime/startSession──────▶│  ← creates session
+                              │◀── { session: { id } } ───────│
+                              │──/realtime/enterSession───────▶│  ← navigates to it
+                              │──/window/unhideAllAndFocus────▶│  ← focuses the window
+                              │                               │
+◀── { sessionId } ───────────│                               │
+                              │                               │
+                              │       Dispatcher works        │
+                              │                               │
+POST /events ◀───────────────│◀── action-block-triggered ────│
+POST /events ◀───────────────│◀── grouped-fvc-updated ───────│
+POST /events ◀───────────────│◀── comment-created ───────────│
+                              │                               │
+POST /leaveCortiSession ─────▶│──/realtime/leaveSession──────▶│
 ```
-
-**Two local ports are involved:**
 
 | Port | Owner | Purpose |
 |------|-------|---------|
-| `45002` | This integration | Receives commands from your CAD (`/openCortiSession`, `/leaveCortiSession`) and real-time events pushed by Corti (`/events`) |
+| `45002` | This integration | Receives commands from your CAD (`/openCortiSession`, `/leaveCortiSession`) and events pushed by Corti (`/events`) |
 | `45001` | Corti Desktop App | Receives `callMethod` RPC calls from this integration to control sessions and the window |
 
-Your CAD system calls port `45002` only. The integration handles everything else.
+Your CAD calls port `45002` only. The integration handles all Corti communication.
 
 ---
 
@@ -49,10 +47,10 @@ Your CAD system calls port `45002` only. The integration handles everything else
 ### Prerequisites
 
 - Node.js 18+
-- Corti Triage desktop app installed and running on the same machine
+- Corti Triage desktop app installed and running with a user logged in
 - A Corti API key for your environment
 
-### Install and configure
+### Install
 
 ```bash
 git clone https://github.com/corticph/sample-node-integration.git
@@ -60,18 +58,20 @@ cd sample-node-integration
 npm install
 ```
 
+### Configure
+
 Create a `.env` file in the project root:
 
 ```
-# Port this integration listens on (your CAD calls this)
+# Port this integration listens on
 PORT=45002
 
-# Corti desktop app RPC server — don't change this unless explicitly instructed
+# Corti desktop app RPC server — don't change this
 CLIENTHOST=http://localhost:45001
 
-# API key for the Corti REST API.
-# The variable name encodes your environment ID (uppercase).
-# For API host https://api.myenv.motocorti.io → API_KEY_MYENV
+# API key for your Corti environment.
+# Derive the variable name from your API host:
+# https://api.myenv.motocorti.io → API_KEY_MYENV
 API_KEY_MYENV=your-api-key-here
 ```
 
@@ -85,28 +85,27 @@ npm run dev
 npm run build && npm start
 ```
 
-The integration starts at `http://localhost:45002`.
+---
 
-### Verify it works
+## Typical flow walkthrough
 
-With the Corti desktop app open and a user logged in:
+The script below simulates exactly what your CAD system will do. Run it to verify the full flow end to end:
 
 ```bash
-# Terminal 2 — simulates your CAD dispatching a call
+# Terminal 1 — start the integration
+npm run dev
+
+# Terminal 2 — simulate a CAD dispatch
 node test-manual-flow.js
 ```
 
-The Corti window should come into focus with a new session. Watch Terminal 1 for event logs as you interact with the flow.
+Here is what happens at each step.
 
 ---
 
-## Connecting your CAD system
+### Step 1 — CAD dispatches a call
 
-There are two integration points you need to implement on the CAD side.
-
-### 1. Open a session when a call comes in
-
-When your CAD receives a new call, POST to `/openCortiSession`:
+Your CAD POSTs to `/openCortiSession` when an incoming call is answered:
 
 ```http
 POST http://localhost:45002/openCortiSession
@@ -119,28 +118,159 @@ Content-Type: application/json
       "factValues": [
         { "id": "patient.name",    "value": "Jane Smith" },
         { "id": "patient.age",     "value": "62" },
-        { "id": "chief.complaint", "value": "Shortness of breath" },
-        { "id": "address",         "value": "34 Elm St, Springfield" }
+        { "id": "chief.complaint", "value": "Shortness of breath" }
       ]
     }
   }
 }
 ```
 
-- **`externalId`** — your CAD's unique identifier for this call or incident. Corti stores this so you can match events back to the right record.
-- **`facts`** — any information you already have. These pre-fill the Corti session so the dispatcher doesn't need to type what you already know. The fact IDs (`patient.name`, `patient.age`, etc.) are defined in your Corti flow configuration.
+- **`externalId`** — your unique identifier for this call or incident. Used to prevent duplicates and to match events back to the right record.
+- **`facts`** — data you already have. When re-entering an existing session these are written back to the session so the dispatcher sees up-to-date information.
 
-The integration handles the idempotency: if a session with that `externalId` is already active it enters it rather than creating a duplicate.
+---
 
-**Response:**
+### Step 2 — Integration opens the session
+
+`src/controllers/sessionController.ts` runs through this logic on every `/openCortiSession` call:
+
+1. **Check active sessions** — calls `/realtime/activeSessions` on the desktop app. If a session with the same `externalId` is already open, navigates to it and returns immediately.
+2. **Check the database** — calls the Corti REST API to look up a past session by `externalId`. If one exists, re-enters it.
+3. **Start a new session** — calls the Corti REST API to find an active call for the current user, then calls `/realtime/startSession`. If a matching call is found the session is linked to its case ID; otherwise a standalone session is created.
+4. **Enter and focus** — calls `/realtime/enterSession` to navigate the desktop app to the session, then `/window/unhideAllAndFocus` to bring it to the foreground.
+
+The response is returned to your CAD:
 
 ```json
 { "message": "Session New", "sessionId": "235caf94-bcb6-41f4-b663-c99e09e38aff" }
 ```
 
-Store the `sessionId` — you may need it to correlate incoming events.
+`message` will be `"Session New"`, `"Session Opened"` (existing active session), or `"Session from Db"` (found in database). Store the `sessionId` to correlate incoming events.
 
-### 2. Close the session when the call ends
+---
+
+### Step 3 — Events arrive as the dispatcher works
+
+While the dispatcher interacts with the Corti flow, the desktop app pushes events to `POST /events`. Every event has this envelope:
+
+```json
+{ "name": "event.name", "data": { ... } }
+```
+
+`src/controllers/eventsController.ts` routes each event by name to a handler. The handlers currently log the data — **replace the `console.log` calls and `TODO` comments with your CAD API calls.**
+
+#### Dispatcher triggers an action block (typecode button)
+
+**Event:** `realtime.session.triage-flow.action-block-triggered`  
+**Handler:** `src/eventHandlers/handleActionBlockTriggered.ts`
+
+Fired when the dispatcher clicks a protocol or typecode button. The handler merges `customProperties` from the block prototype and block instance (instance values win on conflict) into a flat map, logs each value, and writes them back to the session as facts via `/realtime/session/setFactValues`.
+
+```
+Terminal log: New Typecode: typecode - CHEST_PAIN (External Session ID: CAD-12345)
+```
+
+The `customProperties` keys and values are configured in the Corti flow builder. Use them to encode your CAD's field names:
+
+```typescript
+// TODO: replace with your CAD API call
+console.log(`New Typecode: ${fact.id} - ${fact.value} (External Session ID: ${session.externalID})`);
+
+// Example replacement:
+await yourCadApi.updateIncidentType(session.externalID, { [fact.id]: fact.value });
+```
+
+#### Dispatcher fills in a flow value collector
+
+**Event:** `realtime.session.triage-flow.grouped-flow-value-collector-blocks-updated`  
+**Handler:** `src/eventHandlers/handleGroupedFlowValueCollectorBlocksUpdated.ts`
+
+Fired when the dispatcher answers a question in a structured collector (demographics, incident details, clinical pathway, etc.). Corti sends the **full current state** of all collectors on every update — not just the changed field.
+
+Each collector block in `group[]` contains:
+- `displayValues` — formatted, human-readable answer strings
+- `collectedBlockValues` — structured values with `blockPrototypeID` for mapping
+- `blockPrototype.customProperties` — key/value pairs you configure in the Corti flow builder
+
+```
+Terminal log: New Collector: Patient Age - 62 (External Session ID: CAD-12345)
+Terminal log: Collector custom properties: 62 (External Session ID: CAD-12345) [{ key: 'fact_mapping', value: 'pt.age' }]
+```
+
+The handler deduplicates values by `blockPrototypeId` and surfaces any `customProperties` for blocks that have them. Configure a `customProperty` like `fact_mapping = pt.age` on each selectable option in the Corti flow builder to control field mapping from configuration rather than code:
+
+```typescript
+// TODO: replace with your CAD API call
+console.log(`New Collector: ${block.blockPrototype.name} - ${textString} (External Session ID: ${session.externalID})`);
+
+// Example replacement using customProperties for field mapping:
+const mapping = update.customProperties.find(p => p.key === 'fact_mapping');
+if (mapping) {
+  await yourCadApi.setField(session.externalID, mapping.value, update.text);
+}
+```
+
+By default, one event is posted per value change. Set a `requireExplicitSendToLocalhostApi` custom property to `true` on a collector to only receive an event when the dispatcher clicks "Send".
+
+#### Dispatcher adds a comment
+
+**Event:** `realtime.session.comments.comment-created`  
+**Handler:** `src/eventHandlers/handleCommentCreated.ts`
+
+Fired when the dispatcher types a free-text comment.
+
+```
+Terminal log: New Comment: Patient is conscious and breathing. (External Session ID: CAD-12345)
+```
+
+```typescript
+// TODO: replace with your CAD API call
+console.log(`New Comment: ${comment.text} (External Session ID: ${session.externalID})`);
+
+// Example replacement:
+await yourCadApi.appendNote(session.externalID, comment.text);
+```
+
+#### A case ID is linked to the session
+
+**Event:** `realtime.session.case-id-changed`  
+**Handler:** `src/eventHandlers/handleSessionCaseIDChanged.ts`
+
+Fired when Corti associates a case ID with the session (e.g. when it matches the call to an incoming call record). The handler calls `/backendproxy/cases/ensureCaseCustomProperties` to write properties onto the case.
+
+```
+Terminal log: Case ID changed: case-abc-123 (External Session ID: CAD-12345)
+```
+
+```typescript
+// TODO: replace the hardcoded values with a lookup from your CAD
+const customProperties = {
+  "telephone": "1234567890",
+  "location": "34 Elm St, Springfield, IL"
+}
+
+// Example replacement:
+const call = await yourCadApi.getCall(session.externalID);
+const customProperties = { telephone: call.callerNumber, location: call.incidentAddress };
+```
+
+#### Session opened / closed
+
+**Events:** `realtime.session-opened`, `realtime.session-closed`  
+**Handler:** `src/controllers/eventsController.ts` — add logic directly to the `case` blocks.
+
+Use these to track whether the dispatcher is actively working in Corti.
+
+```
+Terminal log: Event: realtime.session-opened (Session ID: 235caf94-…, External ID: CAD-12345)
+Terminal log: Event: realtime.session-closed (Session ID: 235caf94-…, External ID: CAD-12345)
+```
+
+---
+
+### Step 4 — Call ends
+
+When the call is complete, your CAD POSTs to `/leaveCortiSession`:
 
 ```http
 POST http://localhost:45002/leaveCortiSession
@@ -149,147 +279,7 @@ Content-Type: application/json
 {}
 ```
 
-### 3. Configure Corti to send events to this integration
-
-In your Corti environment configuration, set the webhook URL for real-time session events to:
-
-```
-http://localhost:45002/events
-```
-
-Events will then flow automatically as the dispatcher works the call.
-
----
-
-## What you receive from Corti (and what to do with it)
-
-Every event Corti sends has this shape:
-
-```json
-{ "name": "event.name", "data": { ... } }
-```
-
-The integration routes each event to a handler in `src/eventHandlers/`. Each handler currently logs the data — **replace those `console.log` calls and `TODO` comments with your actual CAD API calls.**
-
----
-
-### Action block triggered → update typecode in your CAD
-
-**Event:** `realtime.session.triage-flow.action-block-triggered`
-
-Fired when the dispatcher clicks a protocol or typecode button in the Corti flow. The handler merges the action block's `customProperties` (set in the Corti flow builder) into a flat key/value map and writes them back to the session as facts.
-
-**File:** `src/eventHandlers/handleActionBlockTriggered.ts`
-
-```typescript
-// What you receive
-{ typecode: 'CHEST_PAIN', subtypecode: 'ACUTE' }
-
-// Current behaviour — replace this with your CAD API call
-console.log(`New Typecode: ${fact.id} - ${fact.value} (External Session ID: ${session.externalID})`);
-
-// What you should do instead, for example:
-await yourCadApi.updateIncidentType(session.externalID, { typecode, subtypecode });
-```
-
-The `customProperties` on each action block prototype are configured in the Corti flow builder. Use them to encode your CAD's field names or codes as values.
-
----
-
-### Comment created → write to your CAD notes
-
-**Event:** `realtime.session.comments.comment-created`
-
-Fired when the dispatcher adds a free-text comment to the session.
-
-**File:** `src/eventHandlers/handleCommentCreated.ts`
-
-```typescript
-// What you receive
-{ comment: { text: 'Patient is conscious and breathing.' }, session: { externalID: 'CAD-12345' } }
-
-// Replace this:
-console.log(`New Comment: ${comment.text} (External Session ID: ${session.externalID})`);
-
-// With this:
-await yourCadApi.appendNote(session.externalID, comment.text);
-```
-
----
-
-### Flow value collector updated → update patient record in your CAD
-
-**Event:** `realtime.session.triage-flow.grouped-flow-value-collector-blocks-updated`
-
-This is the most data-rich event. It fires every time the dispatcher answers a question in a structured collector (demographics, clinical pathway, incident summary, etc.). Corti sends the **full current state** of every collector on each update — not just the changed field.
-
-**File:** `src/eventHandlers/handleGroupedFlowValueCollectorBlocksUpdated.ts`
-
-Each collector block in the event has:
-- `displayValues` — the formatted, human-readable answer strings (use these to display or log)
-- `collectedBlockValues` — the structured values with their `blockPrototypeID` for mapping
-- `blockPrototype.customProperties` — key/value pairs you configure in the Corti flow builder to control how this value maps to your CAD
-
-**Using `customProperties` for field mapping:**
-
-In the Corti flow builder, add a custom property to each selectable option's block prototype with the key `fact_mapping` (or any key your integration expects) and the value set to your CAD's field ID:
-
-```
-Block prototype: "Patient Age"
-Custom property: fact_mapping = pt.age
-```
-
-The handler surfaces these:
-
-```typescript
-// What you receive (after dedup by blockPrototypeId)
-{ text: '11', customProperties: [{ key: 'fact_mapping', value: 'pt.age' }] }
-
-// Replace the console.log with mapping logic:
-for (const update of uniqueSelectUpdates) {
-  const mapping = update.customProperties.find(p => p.key === 'fact_mapping');
-  if (mapping) {
-    await yourCadApi.setField(session.externalID, mapping.value, update.text);
-  }
-}
-```
-
-This pattern means you control the CAD field mapping in the Corti flow configuration rather than in code.
-
----
-
-### Case ID linked → push CAD data to the case
-
-**Event:** `realtime.session.case-id-changed`
-
-Fired when a Corti case ID is associated with the session (e.g. when Corti matches the call to an incoming call record). The handler calls `/backendproxy/cases/ensureCaseCustomProperties` to write properties onto the case.
-
-**File:** `src/eventHandlers/handleSessionCaseIDChanged.ts`
-
-```typescript
-// Current — hardcoded placeholder values
-const customProperties = {
-  "telephone": "1234567890",
-  "location": "34 Elm St, Springfield, IL"
-}
-
-// Replace with a lookup from your CAD using session.externalID:
-const call = await yourCadApi.getCall(session.externalID);
-const customProperties = {
-  "telephone": call.callerNumber,
-  "location": call.incidentAddress,
-}
-```
-
----
-
-### Session opened / closed
-
-**Events:** `realtime.session-opened`, `realtime.session-closed`
-
-Use these to track session state in your CAD — for example to know when the dispatcher is actively working Corti versus when they've left the session.
-
-**File:** `src/controllers/eventsController.ts` — add logic directly to the `case` blocks.
+The integration calls `/realtime/leaveSession` on the desktop app. The `realtime.session-closed` event will arrive at `/events` shortly after.
 
 ---
 
@@ -297,7 +287,7 @@ Use these to track session state in your CAD — for example to know when the di
 
 ### The callMethod RPC
 
-The Corti desktop app exposes a local HTTP RPC server at `http://localhost:45001/callMethod`. Every call is a `POST`:
+The Corti desktop app exposes a local HTTP RPC server at `http://localhost:45001/callMethod`. All calls are POSTs:
 
 ```json
 { "method": "/some/method", "params": { "key": "value" } }
@@ -309,7 +299,7 @@ Response:
 { "result": <method-specific value> }
 ```
 
-This integration wraps it in `cortiCallMethod(method, params?)` in `src/services/cortiServices.ts`. Use this function for all desktop app interactions — never call the Corti REST API directly for session control.
+This integration wraps it in `cortiCallMethod(method, params?)` in `src/services/cortiServices.ts`. Use this function for all desktop app interactions.
 
 **Endpoints used by this integration:**
 
@@ -317,11 +307,11 @@ This integration wraps it in `cortiCallMethod(method, params?)` in `src/services
 |--------|--------|--------------|
 | `/realtime/activeSessions` | — | Returns all currently active sessions |
 | `/realtime/startSession` | `externalID?, caseID?` | Creates a new session |
-| `/realtime/enterSession` | `sessionID` | Navigates the desktop app to an existing session |
+| `/realtime/enterSession` | `sessionID` | Navigates the desktop app to a session |
 | `/realtime/leaveSession` | — | Leaves the current session view |
-| `/realtime/session/setFactValues` | `sessionID, facts[]` | Sets fact values on the active session |
+| `/realtime/session/setFactValues` | `sessionID, facts[]` | Writes fact values onto a session |
 | `/window/unhideAllAndFocus` | — | Brings the Corti window to the foreground |
-| `/app/getApiHost` | — | Returns the current Corti API base URL |
+| `/app/getApiHost` | — | Returns the Corti REST API base URL |
 | `/app/getCurrentUser` | — | Returns the authenticated user |
 | `/backendproxy/cases/ensureCaseCustomProperties` | `caseID, customProperties` | Merges custom properties onto a case |
 
@@ -331,28 +321,29 @@ This integration wraps it in `cortiCallMethod(method, params?)` in `src/services
 
 ### Manual end-to-end test
 
-Simulates a CAD dispatching a call and walks you through the actions to verify each event type.
+Simulates a full dispatch cycle and walks you through verifying each event type in the live Corti UI.
 
 ```bash
-# Terminal 1 — run the integration
-npm run build && node dist/index.js
+# Terminal 1
+npm run dev
 
-# Terminal 2 — simulate a CAD dispatch
+# Terminal 2
 node test-manual-flow.js
 ```
 
-Interact with the Corti flow in the desktop app and watch Terminal 1 for the event logs.
+The script opens a session, prints a checklist of actions to perform in the Corti UI, and waits. Press Ctrl+C to trigger the leave step.
 
 ### Automated FVC handler test
 
-Posts synthetic payloads directly to `/events` to verify the grouped flow value collector handler — no live session needed.
+Posts synthetic payloads directly to `/events` to verify the grouped flow value collector handler — no live session or desktop app required.
 
 ```bash
 # Terminal 1 — integration must be running
-node dist/index.js
+npm run dev
 
 # Terminal 2
 node test-grouped-flow-value-collector-blocks-updated.js
+# or: npm run test:grouped-fvc
 ```
 
 ---
@@ -365,15 +356,15 @@ src/
     eventsController.ts       # Routes incoming events by name to handlers
     sessionController.ts      # Handles /openCortiSession and /leaveCortiSession
   eventHandlers/
-    handleActionBlockTriggered.ts               # Typecode / protocol buttons
-    handleCommentCreated.ts                     # Free-text comments
+    handleActionBlockTriggered.ts                    # Typecode / protocol buttons
+    handleCommentCreated.ts                          # Free-text comments
     handleGroupedFlowValueCollectorBlocksUpdated.ts  # Structured flow answers
-    handleSessionCaseIDChanged.ts               # Case ID linking
+    handleSessionCaseIDChanged.ts                    # Case ID linking
   routes/
     events.ts                 # POST /events
     session.ts                # POST /openCortiSession, POST /leaveCortiSession
   services/
-    cortiServices.ts          # callMethod wrapper + Corti REST API calls
+    cortiServices.ts          # cortiCallMethod wrapper + Corti REST API calls
   types/
     apiResponses.ts           # Response type definitions
     events.ts                 # Event payload type definitions
@@ -381,7 +372,7 @@ src/
     utils.ts                  # getApiHost, getApiKey, enterSessionAndOpenWindow
 ```
 
-## Adding new handlers
+### Adding a new event handler
 
 1. Create `src/eventHandlers/handleMyEvent.ts`
 2. Export it from `src/eventHandlers/index.ts`
