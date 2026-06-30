@@ -1,47 +1,46 @@
-# Corti Triage — Sample CAD Integration (Node.js)
+# Corti Triage — CAD Integration (Node.js)
 
-This repository is a **starting point for CAD vendors** building a real-time integration between their dispatch system and the Corti Triage desktop application. Clone it, run it alongside the Corti desktop app, and replace the `console.log` placeholders with calls to your own CAD API.
+This repository is a **working example** of a CAD integration for the Corti Triage desktop application. Clone it, run it alongside the Corti desktop app, and replace the `console.log` placeholders with calls to your own CAD API.
 
 ---
 
-## What you are building
+## How it works
 
-When a dispatcher takes a call, your CAD system should automatically open a Corti Triage session and pre-fill it with what you already know (caller details, incident type, location). As the dispatcher works through Corti's clinical decision support flow, the results — typecodes, demographics, clinical pathway answers — should flow back into your CAD in real time.
-
-This integration sits between the two systems and handles that two-way communication:
+When a dispatcher takes a call, your CAD system calls this integration to create and open a Corti Triage session pre-filled with what you already know. As the dispatcher works through Corti's clinical decision support flow, the results — typecodes, demographics, clinical pathway answers — flow back to this integration in real time for you to push into your CAD.
 
 ```
-Your CAD system                 This integration                 Corti desktop app
-      │                        (Node.js / Express)                (running locally)
-      │                               │                                  │
-      │  Call comes in                │                                  │
-      │──POST /openCortiSession──────▶│                                  │
-      │                               │──callMethod /realtime/startSession──▶│
-      │                               │◀─── { session: { id } } ────────│
-      │                               │──callMethod /realtime/enterSession──▶│
-      │                               │──callMethod /window/unhideAllAndFocus▶│
-      │◀── { sessionId } ────────────│                                  │
-      │                               │                                  │
-      │                               │     Dispatcher works the flow    │
-      │                               │                                  │
-      │                               │◀──POST /events (action-block-triggered)
-      │  Update typecode in CAD  ◀───│                                  │
-      │                               │◀──POST /events (grouped-fvc-updated)
-      │  Update patient details  ◀───│                                  │
-      │                               │                                  │
-      │  Call ends                    │                                  │
-      │──POST /leaveCortiSession─────▶│                                  │
-      │                               │──callMethod /realtime/leaveSession──▶│
+                          This integration                  Corti Desktop App
+                        (Node.js / Express)                  (running locally)
+                                │                                   │
+POST /openCortiSession ────────▶│                                   │
+                                │──/realtime/activeSessions────────▶│
+                                │◀── [ existing sessions ] ─────────│
+                                │                                   │
+                                │  (no existing session)            │
+                                │──/realtime/startSession──────────▶│  ← creates session
+                                │◀── { session: { id } } ───────────│
+                                │──/realtime/enterSession──────────▶│  ← opens it in the UI
+                                │──/window/unhideAllAndFocus───────▶│  ← focuses the window
+                                │──/realtime/session/setFactValues─▶│  ← pre-fills known data
+◀── { sessionId } ─────────────│                                   │
+                                │                                   │
+                                │         Dispatcher works          │
+                                │                                   │
+POST /events ◀─────────────────│◀── action-block-triggered ────────│
+POST /events ◀─────────────────│◀── grouped-fvc-updated ───────────│
+POST /events ◀─────────────────│◀── comment-created ───────────────│
+                                │                                   │
+POST /leaveCortiSession ───────▶│──/realtime/leaveSession─────────▶│
 ```
 
 **Two local ports are involved:**
 
 | Port | Owner | Purpose |
 |------|-------|---------|
-| `45002` | This integration | Receives commands from your CAD (`/openCortiSession`, `/leaveCortiSession`) and real-time events from Corti (`/events`) |
-| `45001` | Corti desktop app | Receives `callMethod` RPC calls from this integration to control the session and window |
+| `45002` | This integration | Receives commands from your CAD (`/openCortiSession`, `/leaveCortiSession`) and real-time events pushed by Corti (`/events`) |
+| `45001` | Corti Desktop App | Receives `callMethod` RPC calls from this integration to control sessions and the window |
 
-Your CAD system only ever speaks to port `45002`. The integration translates those requests into the appropriate `callMethod` calls on port `45001`, and routes events coming back from Corti to your CAD.
+Your CAD system calls port `45002` only. The integration handles everything else.
 
 ---
 
