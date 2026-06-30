@@ -1,23 +1,10 @@
-import dotenv from 'dotenv';
-import express from 'express'
-import bodyParser from 'body-parser'
-import sessionRoutes from './routes/session'
-import eventsRoute from './routes/events'
-// Continue importing other routes as required
+import dotenv from 'dotenv'
+dotenv.config()
 
-// setup express app
-const app = express()
-dotenv.config();
-const port = process.env.PORT;
+import { createApp } from './app'
 
-// bodyParser setup
-app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({ extended: false }))
-
-// use imported routes
-app.use(sessionRoutes)
-app.use(eventsRoute)
-// Continue using other imported routes as required
+const port = process.env.PORT || 45002
+const app = createApp()
 
 // set the app to listen on the port
 app.listen(port, () => {

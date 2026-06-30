@@ -1,4 +1,5 @@
-import { GroupedFlowValueCollectorBlocksUpdated, CustomProperty } from "../types/events";
+import { GroupedFlowValueCollectorBlocksUpdated } from "../types/events";
+import { CustomProperty } from "../types/shared";
 
 interface ISelectUpdates {
   blockPrototypeId: string;
@@ -15,7 +16,10 @@ const handleGroupedFlowValueCollectorBlocksUpdated = async (
   const selectUpdates: ISelectUpdates[] = []
 
   group.forEach((block) => {
-    if (block.displayValues.length === 0) return;
+    if (block.displayValues.length === 0) {
+      console.log(`New Collector: ${block.blockPrototype.name} - (no values) (External Session ID: ${session.externalID})`);
+      return;
+    }
     const textString = block.displayValues.map((obj) => obj.text).join(" | ");
 
     const { values, blockPrototypes } = block.collectedBlockValues;
@@ -53,6 +57,9 @@ const handleGroupedFlowValueCollectorBlocksUpdated = async (
       update.customProperties
     );
   });
+
+  // Returned for testability; the controller ignores the return value.
+  return uniqueSelectUpdates;
 };
 
 export default handleGroupedFlowValueCollectorBlocksUpdated;

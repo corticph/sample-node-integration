@@ -18,12 +18,21 @@ export const handleEvent = async (req: Request, res: Response) => {
       break;
     case 'realtime.session.case-id-changed':
         eventHandlers.handleSessionCaseIDChanged(data);
+      break;
     case 'realtime.session-opened':
+      console.log(`Event: ${event.name} (Session ID: ${data?.session?.id ?? 'N/A'}, External ID: ${data?.session?.externalID ?? 'N/A'})`);
+      break;
     case 'realtime.session-closed':
+      console.log(`Event: ${event.name} (Session ID: ${data?.session?.id ?? 'N/A'}, External ID: ${data?.session?.externalID ?? 'N/A'})`);
+      break;
     case 'app.logout':
     case 'app.login':
+      console.log(`Event: ${event.name}`);
+      break;
     default:
-    //   console.log(data);
+      // Avoid logging the full payload — event data can contain session facts
+      // and other PII. Log only the name and identifiers.
+      console.log(`Unhandled event: ${event.name} (Session ID: ${data?.session?.id ?? 'N/A'}, External ID: ${data?.session?.externalID ?? 'N/A'})`);
       break;
   }
   res.sendStatus(200);

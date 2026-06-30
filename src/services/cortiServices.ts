@@ -35,28 +35,19 @@ export const updateCaseCustomProperties = async (
   caseId: string,
   customPropertiesBody: CaseCustomProperties
 ) => {
-  const apiHost = await getApiHost();
-  const apiKey = getApiKey(apiHost);
-  if (!apiKey) return console.error(`No API key found for ${apiHost}`);
-
-  fetch(
-    `${apiHost}/public/api/v2.0/cases/${caseId}/custom-properties`,
-    {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-      },
-      body: JSON.stringify(customPropertiesBody),
-    }
-  );
+  // Return the promise so callers can await completion and observe failures
+  // rather than treating a fire-and-forget call as if it had succeeded.
+  return cortiCallMethod("/backendproxy/cases/ensureCaseCustomProperties", {
+    caseID: caseId,
+    customProperties: customPropertiesBody,
+  });
 };
 
 export const checkSessionExists = async (externalSessionId: string): Promise<DBSession | null> => {
   const apiHost = await getApiHost();
-  const apiKey = getApiKey(apiHost);
+  const apiKey = getApiKey();
   if (!apiKey) {
-    console.error(`No API key found for ${apiHost}`);
+    console.error("No API key found — set API_KEY in .env");
     return null;
 }
 
@@ -79,9 +70,9 @@ export const checkSessionExists = async (externalSessionId: string): Promise<DBS
 export const getMatchingCalls = async (window = 60): Promise<Call[]> => {
   
     const apiHost = await getApiHost();
-    const apiKey = getApiKey(apiHost);
+    const apiKey = getApiKey();
     if (!apiKey) {
-        console.error(`No API key found for ${apiHost}`);
+        console.error("No API key found — set API_KEY in .env");
         return []
     }
 

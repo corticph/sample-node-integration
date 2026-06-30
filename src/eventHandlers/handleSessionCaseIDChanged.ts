@@ -1,19 +1,20 @@
 import { updateCaseCustomProperties } from "../services/cortiServices";
-import { Session } from "../types/events";
+import { SessionCaseIDChanged } from "../types/events";
 
-interface SessionCaseIDChangedBody {
-    session: Session;
-}
-
-const handleSessionCaseIDChanged = async (data: SessionCaseIDChangedBody) => {
+const handleSessionCaseIDChanged = async (data: SessionCaseIDChanged) => {
   const { session } = data;
   if (session.caseID) {
+    console.log(`Case ID changed: ${session.caseID} (External Session ID: ${session.externalID})`);
     // fetch custom properties for the case, either from the CAD or in memory
     const customProperties = {
         "telephone": "1234567890",
         "location": "34 Elm St, Springfield, IL"
     }
-    await updateCaseCustomProperties(session.caseID, customProperties);
+    try {
+      await updateCaseCustomProperties(session.caseID, customProperties);
+    } catch (error) {
+      console.error("Failed to update case custom properties:", error);
+    }
   }
 };
 
