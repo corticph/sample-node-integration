@@ -30,7 +30,9 @@ export const handleEvent = async (req: Request, res: Response) => {
       console.log(`Event: ${event.name}`);
       break;
     default:
-      console.log(`Unhandled event: ${event.name}`, data);
+      // Avoid logging the full payload — event data can contain session facts
+      // and other PII. Log only the name and identifiers.
+      console.log(`Unhandled event: ${event.name} (Session ID: ${data?.session?.id ?? 'N/A'}, External ID: ${data?.session?.externalID ?? 'N/A'})`);
       break;
   }
   res.sendStatus(200);

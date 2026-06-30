@@ -35,7 +35,9 @@ export const updateCaseCustomProperties = async (
   caseId: string,
   customPropertiesBody: CaseCustomProperties
 ) => {
-  cortiCallMethod("/backendproxy/cases/ensureCaseCustomProperties", {
+  // Return the promise so callers can await completion and observe failures
+  // rather than treating a fire-and-forget call as if it had succeeded.
+  return cortiCallMethod("/backendproxy/cases/ensureCaseCustomProperties", {
     caseID: caseId,
     customProperties: customPropertiesBody,
   });

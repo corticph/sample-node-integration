@@ -10,7 +10,11 @@ const handleSessionCaseIDChanged = async (data: SessionCaseIDChanged) => {
         "telephone": "1234567890",
         "location": "34 Elm St, Springfield, IL"
     }
-    await updateCaseCustomProperties(session.caseID, customProperties);
+    try {
+      await updateCaseCustomProperties(session.caseID, customProperties);
+    } catch (error) {
+      console.error("Failed to update case custom properties:", error);
+    }
   }
 };
 
